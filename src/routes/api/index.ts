@@ -1,12 +1,12 @@
 import { Router } from 'express'
 import userRoutes from './user-routes'
 import sessionRoutes from './session-routes'
-import productRoutes from './product-routes'
+import interestRoutes from './interest-routes'
 
 const router = Router()
 
 router.use('/users', userRoutes)
 router.use('/sessions', sessionRoutes)
-router.use('/products', productRoutes)
+router.use('/interests', interestRoutes)
 
 export default router

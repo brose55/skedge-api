@@ -5,7 +5,7 @@ import IUserModel from "./IUserModel";
 interface IInterestModel extends mongoose.Document {
 	user: IUserModel["_id"];
 	value: string;
-	level: string;
+	priority: string;
 	weight: number;
 }
 

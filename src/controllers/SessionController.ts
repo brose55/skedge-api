@@ -30,6 +30,7 @@ export async function createUserSessionHandler(req: Request, res: Response) {
   const accessAge = config.get('accessTokenCookieTtl')
   const refreshAge = config.get('refreshTokenCookieTtl')
   // return both tokens
+  // TODO: use setHeader or import cookie
   res.cookie("accessToken", accessToken, {
 		maxAge: config.get("accessTokenCookieTtl"),
 		httpOnly: true,
