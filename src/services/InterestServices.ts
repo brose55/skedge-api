@@ -20,7 +20,6 @@ export async function createInterests(
   try {
     const options = {upsert: true}
     await updates.forEach(async(update: any) => {
-      logger.info(update)
       await InterestModel.replaceOne(
         {value: update.value},
         {

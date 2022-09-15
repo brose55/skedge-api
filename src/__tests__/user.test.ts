@@ -119,7 +119,10 @@ describe('user', () => {
         const send = jest.fn()
 
         const res = {
-          send
+          send,
+          cookie: () => {
+            return 'cookie sent'
+          }
         }
 
         // @ts-ignore
