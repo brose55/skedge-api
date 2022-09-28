@@ -15,8 +15,6 @@ export async function getInterestsHandler(
   req: Request,
   res: Response
 ) {
-  logger.info(res.locals.user._id);
-  
   const user = res.locals.user._id
   const interests = await findInterests({ user: user });
 
