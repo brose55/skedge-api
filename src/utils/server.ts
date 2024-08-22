@@ -1,17 +1,19 @@
-import express from "express";
-import cors from 'cors'
-import deserializeUser from "../middleware/deserializeUser";
-import router from "../routes";
-import config from "config";
-import cookieParser from "cookie-parser";
+import express from "express"
+import cors from "cors"
+import deserializeUser from "../middleware/deserializeUser"
+import router from "../routes"
+import config from "config"
+import cookieParser from "cookie-parser"
 
 function createServer() {
 	const app = express()
 
-	app.use(cors({
-		origin: config.get('origin'),
-		credentials: true
-	}))
+	app.use(
+		cors({
+			origin: config.get("origin"),
+			credentials: true,
+		})
+	)
 
 	app.use(cookieParser())
 
@@ -19,9 +21,9 @@ function createServer() {
 
 	app.use(deserializeUser)
 
-    app.use(router)
+	app.use(router)
 
-    return app
+	return app
 }
 
-export default createServer;
+export default createServer

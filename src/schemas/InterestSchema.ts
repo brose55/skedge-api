@@ -4,7 +4,7 @@ const payload = {
 	body: 
     array(
 			object({
-				value: string({
+				topic: string({
 					required_error: "interest name is required",
 				}).max(20, "interest name must be less than 20 characters long"),
 				priority: string({

@@ -1,55 +1,63 @@
 import mongoose from "mongoose"
-import bcrypt from 'bcrypt'
-import config from 'config'
+import bcrypt from "bcrypt"
+import config from "config"
 import IUserModel from "../interfaces/IUserModel"
+import logger from "../utils/logger"
 
 // basic created user schema
-const userSchema = new mongoose.Schema({
-  username: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    match: [/.+@.+\..+/, 'Must match an email address!']
-  },
-  password: {
-    type: String,
-    required: true
-  }
-}, {
-  timestamps: true
-})
+const userSchema = new mongoose.Schema(
+	{
+		username: {
+			type: String,
+			required: true,
+			unique: true,
+			trim: true,
+		},
+		email: {
+			type: String,
+			required: true,
+			unique: true,
+			match: [/.+@.+\..+/, "Must match an email address!"],
+		},
+		password: {
+			type: String,
+			required: true,
+		},
+	},
+	{
+		timestamps: true,
+	}
+)
 
 // before save, encrypt the password
-userSchema.pre("save",async function(next) {
-  // avoiding using this directly
-  let user = this as IUserModel
-  if (!user.isModified) {
-    return next()
-  }
+userSchema.pre("save", async function (next) {
+	// avoiding using this directly
+	let user = this as IUserModel
 
-  // very strong encryption
-  const salt = await bcrypt.genSalt(config.get<number>('saltWorkFactor'))
-  const hash = await bcrypt.hashSync(user.password, salt)
+	// save resources by only rehashing the password if it's been modified
+	if (!user.isModified("password")) {
+		return next()
+	}
 
-  // change password to hash string
-  user.password = hash
+	// very strong encryption
+	const salt = await bcrypt.genSalt(config.get<number>("saltWorkFactor"))
+	const hash = await bcrypt.hash(user.password, salt)
 
-  return next()
+	user.password = hash
+
+	return next()
 })
 
 // calls schema method for comparing password
-userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-  // avoiding using this directly
-  const user = this as IUserModel
-  return bcrypt
-    .compare(candidatePassword, user.password)
-    .catch(err => false)
+userSchema.methods.comparePassword = async function (
+	candidatePassword: string
+): Promise<boolean> {
+	// avoiding using this directly
+	const user = this as IUserModel
+	return bcrypt.compare(candidatePassword, user.password).catch((err) => {
+		logger.error("error comparing password", err)
+		return false
+	})
 }
 
 // our actual User Model

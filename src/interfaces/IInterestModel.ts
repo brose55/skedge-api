@@ -1,12 +1,12 @@
-import mongoose from "mongoose";
-import IUserModel from "./IUserModel";
+import mongoose from "mongoose"
+import IUserModel from "./IUserModel"
 
 // type for the Interest Model
 interface IInterestModel extends mongoose.Document {
-	user: IUserModel["_id"];
-	value: string;
-	priority: string;
-	weight: number;
+	userId: IUserModel["_id"]
+	name: string
+	priorityLevel: string
+	weight: number
 }
 
-export default IInterestModel;
+export default IInterestModel

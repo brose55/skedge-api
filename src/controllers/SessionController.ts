@@ -33,7 +33,7 @@ export async function createUserSessionHandler(req: Request, res: Response) {
   // TODO: use setHeader or import cookie
   res.cookie("accessToken", accessToken, {
 		maxAge: config.get("accessTokenCookieTtl"),
-		httpOnly: true,
+		httpOnly: false,
 		domain: config.get("domain"),
 		path: "/",
 		sameSite: "strict",
@@ -43,7 +43,7 @@ export async function createUserSessionHandler(req: Request, res: Response) {
 
   res.cookie("refreshToken", refreshToken, {
 		maxAge: config.get("refreshTokenCookieTtl"),
-		httpOnly: true,
+		httpOnly: false,
 		domain: config.get("domain"),
 		path: "/",
 		sameSite: "strict",
@@ -55,6 +55,7 @@ export async function createUserSessionHandler(req: Request, res: Response) {
 }
 
 export async function getUserSessionHandler(req: Request, res: Response) {
+  
   const userId = res.locals.user._id
   
   const sessions = await findSessions({user: userId, valid: true})

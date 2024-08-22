@@ -21,7 +21,7 @@ export async function createInterests(
     const options = {upsert: true}
     await updates.forEach(async(update: any) => {
       await InterestModel.replaceOne(
-        {value: update.value},
+        {topic: update.topic},
         {
           ...update
         },

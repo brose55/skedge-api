@@ -13,20 +13,20 @@ const userPayload = {
 	email: "jane.doe@example.com",
 	username: "Jane Doe",
 };
-
+// TODO: This is causing my test to sometimes fail
 const interestsPayload = [
 		{
-			value: "health",
+			topic: "health",
 			priority: "high",
 			weight: 3,
 		},
 		{
-			value: "python",
+			topic: "python",
 			priority: "high",
 			weight: 3,
 		},
 		{
-			value: "reading",
+			topic: "reading",
 			priority: "low",
 			weight: 1,
 		},
@@ -88,7 +88,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "high",
 						user: userId,
-						value: "health",
+						topic: "health",
 						weight: 3,
 					},
 					{
@@ -96,7 +96,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "high",
 						user: userId,
-						value: "python",
+						topic: "python",
 						weight: 3,
 					},
 					{
@@ -104,7 +104,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "low",
 						user: userId,
-						value: "reading",
+						topic: "reading",
 						weight: 1,
 					},
 				]);
@@ -130,7 +130,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "high",
 						user: userId,
-						value: "health",
+						topic: "health",
 						weight: 3,
 					},
 					{
@@ -138,7 +138,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "high",
 						user: userId,
-						value: "python",
+						topic: "python",
 						weight: 3,
 					},
 					{
@@ -146,7 +146,7 @@ describe("interests", () => {
 						_id: expect.any(String),
 						priority: "low",
 						user: userId,
-						value: "reading",
+						topic: "reading",
 						weight: 1,
 					},
 				]);

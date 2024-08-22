@@ -1,16 +1,16 @@
-import mongoose from "mongoose";
-import IInterestModel from "../interfaces/IInterestModel";
+import mongoose from "mongoose"
+import IInterestModel from "../interfaces/IInterestModel"
 
 const interestSchema = new mongoose.Schema({
-	user: {
+	userId: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: "User",
 	},
-	value: {
+	name: {
 		type: String,
 		required: true,
 	},
-	priority: {
+	priorityLevel: {
 		type: String,
 		required: true,
 	},
@@ -18,9 +18,9 @@ const interestSchema = new mongoose.Schema({
 		type: Number,
 		required: true,
 	},
-});
+})
 
 // our actual Interest Model
-const InterestModel = mongoose.model<IInterestModel>("Interest", interestSchema);
+const InterestModel = mongoose.model<IInterestModel>("Interest", interestSchema)
 
-export default InterestModel;
+export default InterestModel
