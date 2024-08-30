@@ -10,7 +10,7 @@ const interestSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  priorityLevel: {
+  priority: {
     type: String,
     required: true,
   },
