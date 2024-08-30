@@ -3,7 +3,7 @@ import { object, array, string, number, TypeOf } from "zod";
 const payload = {
   body: array(
     object({
-      topic: string({
+      name: string({
         required_error: "interest name is required",
       }).max(20, "interest name must be less than 20 characters long"),
       priority: string({

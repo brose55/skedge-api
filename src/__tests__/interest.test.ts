@@ -16,15 +16,15 @@ const userPayload = {
 // TODO: This is causing my test to sometimes fail
 const interestsPayload = [
   {
-    topic: "health",
+    name: "health",
     priority: "high",
   },
   {
-    topic: "python",
+    name: "python",
     priority: "high",
   },
   {
-    topic: "reading",
+    name: "reading",
     priority: "low",
   },
 ];
@@ -84,21 +84,21 @@ describe("interests", () => {
               _id: expect.any(String),
               priority: "high",
               user: userId,
-              topic: "health",
+              name: "health",
             },
             {
               __v: 0,
               _id: expect.any(String),
               priority: "high",
               user: userId,
-              topic: "python",
+              name: "python",
             },
             {
               __v: 0,
               _id: expect.any(String),
               priority: "low",
               user: userId,
-              topic: "reading",
+              name: "reading",
             },
           ]);
         });
@@ -123,21 +123,21 @@ describe("interests", () => {
             _id: expect.any(String),
             priority: "high",
             user: userId,
-            topic: "health",
+            name: "health",
           },
           {
             __v: 0,
             _id: expect.any(String),
             priority: "high",
             user: userId,
-            topic: "python",
+            name: "python",
           },
           {
             __v: 0,
             _id: expect.any(String),
             priority: "low",
             user: userId,
-            topic: "reading",
+            name: "reading",
           },
         ]);
       });
