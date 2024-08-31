@@ -1,7 +1,12 @@
 import mongoose from "mongoose";
 import IInterestModel from "../interfaces/IInterestModel";
+import { v4 as uuidv4 } from "uuid";
 
 const interestSchema = new mongoose.Schema({
+  _id: {
+    type: String,
+    default: uuidv4,
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
