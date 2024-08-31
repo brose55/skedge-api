@@ -13,7 +13,7 @@ const userPayload = {
   email: "jane.doe@example.com",
   username: "Jane Doe",
 };
-// TODO: This is causing my test to sometimes fail
+
 const interestsPayload = [
   {
     name: "health",
@@ -30,14 +30,19 @@ const interestsPayload = [
 ];
 
 describe("interests", () => {
+  let mongoServer: MongoMemoryServer;
+
   beforeAll(async () => {
-    const mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create();
     await mongoose.connect(mongoServer.getUri());
   });
 
   afterAll(async () => {
     await mongoose.disconnect();
     await mongoose.connection.close();
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
   });
 
   describe("get interests route", () => {
@@ -83,21 +88,21 @@ describe("interests", () => {
               __v: 0,
               _id: expect.any(String),
               priority: "high",
-              user: userId,
+              userId: userId,
               name: "health",
             },
             {
               __v: 0,
               _id: expect.any(String),
               priority: "high",
-              user: userId,
+              userId: userId,
               name: "python",
             },
             {
               __v: 0,
               _id: expect.any(String),
               priority: "low",
-              user: userId,
+              userId: userId,
               name: "reading",
             },
           ]);
@@ -107,7 +112,7 @@ describe("interests", () => {
   });
 
   describe("update interests route", () => {
-    describe("change me", () => {
+    describe("given valid interests", () => {
       test("should create the interests, then return them", async () => {
         const jwt = signJwt(userPayload);
 
@@ -122,21 +127,21 @@ describe("interests", () => {
             __v: 0,
             _id: expect.any(String),
             priority: "high",
-            user: userId,
+            userId: userId,
             name: "health",
           },
           {
             __v: 0,
             _id: expect.any(String),
             priority: "high",
-            user: userId,
+            userId: userId,
             name: "python",
           },
           {
             __v: 0,
             _id: expect.any(String),
             priority: "low",
-            user: userId,
+            userId: userId,
             name: "reading",
           },
         ]);

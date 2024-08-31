@@ -1,11 +1,9 @@
-import {object, string} from 'zod'
+import { object, string } from "zod";
+import passwordValidator from "../utils/passwordValidator";
 
 export const createSessionSchema = object({
- body: object({
-  email: string({
-    required_error: 'email is required' }),
-  password: string({
-    required_error: 'password is required'
-  })
- })
-})
+  body: object({
+    email: string().email("Not a valid email").min(1, "email is required"),
+    password: passwordValidator,
+  }),
+});
