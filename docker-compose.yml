@@ -21,18 +21,5 @@ services:
       ME_CONFIG_MONGODB_ADMINPASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD}
       ME_CONFIG_MONGODB_URL: ${ME_CONFIG_MONGODB_URL}
 
-  skedge-api:
-    container_name: rest-api
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-    build:
-      context: ./
-    ports:
-      - 3000:3000
-    depends_on:
-      - mongo
-
 volumes:
   mongo-data:
-    driver: local
