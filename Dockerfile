@@ -1,5 +1,5 @@
-# Use the official Node.js image with Corepack enabled
-FROM node:20.17.0
+# Use the official Node.js image 
+FROM node:22
 
 # Enable Corepack
 RUN corepack enable
@@ -11,19 +11,19 @@ RUN apt-get update && apt-get install -y build-essential python3 g++
 WORKDIR /app
 
 # Copy package.json and yarn.lock before other files to leverage Docker caching
-COPY package.json yarn.lock ./
+COPY package.json package-lock.json ./
 
 # Set environment variable to production to avoid installing devDependencies
 ENV NODE_ENV=production
 
 # Install dependencies (including any workspace dependencies if applicable)
-RUN yarn install --immutable --check-cache
+RUN npm ci
 
 # Copy the rest of the application files
 COPY . .
 
 # Build the application
-RUN yarn build
+RUN npm run build
 
 # Expose the application's port (adjust if necessary)
 EXPOSE 3000
