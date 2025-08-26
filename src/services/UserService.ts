@@ -1,44 +1,66 @@
-import { omit } from "lodash";
 import { FilterQuery } from "mongoose";
-import IUserModel from "../interfaces/IUserModel";
-import UserModel from "../models/UserModel";
+import { User, UserModel } from "@/models/user";
 import { CreateUserInput } from "../schemas/UserSchema";
+import {
+  PUBLIC_USER_PROJECTION,
+  type PublicUserDTO,
+} from "../repos/users.repository";
 
-// createUser function should match the shape of the body defined in Zod schema
-export async function createUser(input: CreateUserInput["body"]) {
-  // Strip out passwordConfirmation before saving the user
+// Create user → return PublicUserDTO (no secrets ever leave this layer)
+export async function createUser(
+  input: CreateUserInput["body"]
+): Promise<PublicUserDTO> {
+  // Strip out passwordConfirmation before saving
   const { passwordConfirmation, ...userData } = input;
 
-  try {
-    const user = await UserModel.create(userData);
-    return omit(user.toJSON(), ["password"]);
-  } catch (err: any) {
-    throw new Error(err);
-  }
+  const doc = await UserModel.create(userData);
+
+  // Re-read with the public projection to avoid leaking any hidden fields
+  const pub = await UserModel.findById(doc._id)
+    .select(PUBLIC_USER_PROJECTION)
+    .lean<PublicUserDTO>()
+    .exec();
+
+  return pub!; // should exist immediately after create
 }
 
-// check password, if correct return user object else return false
-export async function validatePassword({
-  email,
-  password,
-}: {
+/**
+ * Validate credentials.
+ * Returns:
+ *  - false if invalid
+ *  - { user, passwordVersion } if valid (for issuing JWT with pv)
+ */
+export async function validatePassword(params: {
   email: string;
   password: string;
-}) {
-  const user = await UserModel.findOne({ email });
+}): Promise<false | { user: PublicUserDTO; passwordVersion: number }> {
+  const { email, password } = params;
 
-  if (!user) {
-    return false;
-  }
+  // Need +password to compare, +passwordVersion for JWT pv
+  const candidate = await UserModel.findOne({ email }).select(
+    "+password +passwordVersion"
+  );
 
-  const isValid = await user.comparePassword(password);
-  if (!isValid) {
-    return false;
-  }
+  if (!candidate) return false;
 
-  return omit(user.toJSON(), ["password"]);
+  const ok = await candidate.comparePassword(password);
+  if (!ok) return false;
+
+  // Fetch a public view to return to callers (no secrets)
+  const pub = await UserModel.findById(candidate._id)
+    .select(PUBLIC_USER_PROJECTION)
+    .lean<PublicUserDTO>()
+    .exec();
+
+  return { user: pub!, passwordVersion: candidate.passwordVersion! };
 }
 
-export async function findUser(query: FilterQuery<IUserModel>) {
-  return UserModel.findOne(query).lean();
+/** Public read helper used by controllers or other services */
+export function findUser(
+  query: FilterQuery<User>
+): Promise<PublicUserDTO | null> {
+  return UserModel.findOne(query)
+    .select(PUBLIC_USER_PROJECTION)
+    .lean<PublicUserDTO>()
+    .exec();
 }
