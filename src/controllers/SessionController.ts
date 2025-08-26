@@ -1,3 +1,4 @@
+// controllers/SessionController.ts
 import { Request, Response } from "express";
 import config from "config";
 import {
@@ -6,81 +7,102 @@ import {
   updateSession,
 } from "../services/SessionService";
 import { validatePassword } from "../services/UserService";
-import { signJwt } from "../utils/jwt";
+import { signJwt, verifyJwt } from "../utils/jwt";
 
+// POST /sessions  (login)
 export async function createUserSessionHandler(req: Request, res: Response) {
-  // validate user's password
-  const user = await validatePassword(req.body);
-  if (!user) {
-    return res.status(401).send("Invalid email or password");
-  }
+  // 1) Validate credentials
+  const result = await validatePassword(req.body);
+  if (!result) return res.status(401).send("Invalid email or password");
 
-  // create session
+  const { user, passwordVersion } = result;
+
+  // 2) Create session
   const session: any = await createSession(
-    user._id.toString(), // Ensure _id is a string
-    req.get("user-agent") || ""
+    user._id,
+    req.get("user-agent") || undefined
   );
 
-  // create access token
+  // 3) Issue tokens with { sub, pv, session }
   const accessToken = signJwt(
-    { ...user, session: session._id },
+    { sub: user._id, pv: passwordVersion, session: session._id },
     { expiresIn: config.get("accessTokenTtl") }
   );
 
-  // create refresh token
   const refreshToken = signJwt(
-    { ...user, session: session._id },
+    { sub: user._id, pv: passwordVersion, session: session._id },
     { expiresIn: config.get("refreshTokenTtl") }
   );
 
-  const domain = config.get("domain");
-  const accessAge = config.get("accessTokenCookieTtl");
-  const refreshAge = config.get("refreshTokenCookieTtl");
-  // return both tokens
+  // 4) Set cookies (mirror your existing config)
   res.cookie("accessToken", accessToken, {
-    maxAge: config.get("accessTokenCookieTtl"),
-    // TODO: set to true in production
+    maxAge: config.get<number>("accessTokenCookieTtl"),
     httpOnly: true,
-    domain: config.get("domain"),
+    domain: config.get<string>("domain"),
     path: "/",
     sameSite: "strict",
-    // TODO: set to true in production
-    secure: true,
+    secure: true, // set true in prod
   });
 
   res.cookie("refreshToken", refreshToken, {
-    maxAge: config.get("refreshTokenCookieTtl"),
-    // TODO: set to true in production
+    maxAge: config.get<number>("refreshTokenCookieTtl"),
     httpOnly: true,
-    domain: config.get("domain"),
+    domain: config.get<string>("domain"),
     path: "/",
     sameSite: "strict",
-    // TODO: set to true in production
-    secure: true,
+    secure: true, // set true in prod
   });
 
-  return res.send({ accessToken, refreshToken });
+  // return tokens; optionally include the public user
+  return res.status(201).send({ accessToken, refreshToken, user });
 }
 
-export async function getUserSessionHandler(req: Request, res: Response) {
-  const userId = res.locals.user._id;
+// GET /sessions  (list sessions for current user)
+export async function getUserSessionHandler(_req: Request, res: Response) {
+  // res.locals.user is a PublicUserDTO set by deserializeUser
+  const me = res.locals.user;
+  if (!me?._id) return res.sendStatus(401);
 
-  const sessions = await findSessions({ user: userId, valid: true });
-
-  if (!sessions) {
-    res.sendStatus(404);
-  }
+  const sessions = await findSessions({ user: me._id, valid: true });
+  if (!sessions) return res.sendStatus(404);
 
   return res.send(sessions);
 }
 
+// DELETE /sessions  (logout current session)
 export async function deleteUserSessionHandler(req: Request, res: Response) {
-  const sessionId = res.locals.user.session;
+  // We can no longer trust res.locals.user.session (locals has public user only).
+  // Decode a token to get the session id. Prefer refresh; fall back to access.
+  const refreshToken =
+    req.cookies?.refreshToken ||
+    (req.headers["x-refresh"] as string | undefined);
+  const accessToken =
+    req.cookies?.accessToken ||
+    req.headers.authorization?.replace(/^Bearer\s/, "") ||
+    undefined;
 
-  await updateSession({ _id: sessionId }, { valid: false });
+  let sessionId: string | null = null;
 
-  return res.send({
-    accessToken: null,
-    refreshToken: null,
-  });
+  if (refreshToken) {
+    const { decoded } = verifyJwt(refreshToken);
+    if (decoded && typeof decoded === "object" && "session" in decoded) {
+      sessionId = (decoded as any).session;
+    }
+  }
+  if (!sessionId && accessToken) {
+    const { decoded } = verifyJwt(accessToken);
+    if (decoded && typeof decoded === "object" && "session" in decoded) {
+      sessionId = (decoded as any).session;
+    }
+  }
+
+  if (sessionId) {
+    await updateSession({ _id: sessionId }, { valid: false });
+  }
+
+  // Clear cookies regardless (idempotent)
+  res.clearCookie("accessToken", { path: "/" });
+  res.clearCookie("refreshToken", { path: "/" });
+
+  return res.status(204).end();
 }

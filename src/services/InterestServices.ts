@@ -1,15 +1,14 @@
 import { FilterQuery, QueryOptions, UpdateQuery } from "mongoose";
-import IInterestModel from "../interfaces/IInterestModel";
-import InterestModel from "../models/InterestModel";
+import { Interest, InterestModel } from "@/models/interest";
 import logger from "../utils/logger";
 
-export async function findInterests(query: FilterQuery<IInterestModel>) {
+export async function findInterests(query: FilterQuery<Interest>) {
   return InterestModel.find(query).lean();
 }
 
 export async function createInterests(
-  query: FilterQuery<IInterestModel>,
-  updates: UpdateQuery<IInterestModel>[]
+  query: FilterQuery<Interest>,
+  updates: UpdateQuery<Interest>[]
 ) {
   try {
     const options = { upsert: true };
@@ -34,13 +33,13 @@ export async function createInterests(
 }
 
 export async function findInterest(
-  query: FilterQuery<IInterestModel>,
+  query: FilterQuery<Interest>,
   options: QueryOptions = { lean: true }
 ) {
   return InterestModel.findOne(query, {}, options);
 }
 
 //  delete an interest from previous interests
-export async function deleteInterest(query: FilterQuery<IInterestModel>) {
+export async function deleteInterest(query: FilterQuery<Interest>) {
   return InterestModel.deleteOne(query);
 }

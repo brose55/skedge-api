@@ -53,7 +53,7 @@ export async function deleteInterestHandler(
 ) {
   const userId = res.locals.user._id;
   const interestId = req.params.interestId;
-  const interest = await findInterest({ interestId });
+  const interest = await findInterest({ _id: interestId });
 
   if (!interest) {
     return res.status(404);

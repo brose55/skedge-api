@@ -1,34 +1,30 @@
-import jwt from 'jsonwebtoken'
-import config from 'config'
+import jwt from "jsonwebtoken";
+import config from "config";
 
-const privateKey = config.get<string>('privateKey')
-const publicKey = config.get<string>('publicKey')
+export type VerifyJwtResult = {
+  valid: boolean;
+  expired: boolean;
+  decoded: null | string | jwt.JwtPayload;
+};
 
-export function signJwt(
-  object: Object,
-  options?: jwt.SignOptions | undefined
-) {
-  return jwt.sign(object, privateKey, {
-    // check to see if options isn't undefined before spreading it
-    ...(options && options),
-    algorithm: 'RS256'
-  })
+const privateKey = config.get<string>("privateKey");
+const publicKey = config.get<string>("publicKey");
+
+export function signJwt(payload: object, options?: jwt.SignOptions) {
+  return jwt.sign(payload, privateKey, {
+    ...(options || {}),
+    algorithm: "RS256",
+  });
 }
 
-export function verifyJwt(token: string) {
+export function verifyJwt(token: string): VerifyJwtResult {
   try {
-    const decoded = jwt.verify(token, publicKey)
-    return {
-      valid: true,
-      expired: false,
-      decoded: decoded
-    };
-    
+    const decoded = jwt.verify(token, publicKey);
+    return { valid: true, expired: false, decoded };
   } catch (err: any) {
-    return {
-      valid: false,
-      expired: err.message = 'jwt expired',
-      decoded: null
-    }
+    // IMPORTANT: don't assign to err.message — compare it
+    const isExpired =
+      err?.name === "TokenExpiredError" || err?.message === "jwt expired";
+    return { valid: false, expired: isExpired, decoded: null };
   }
 }
