@@ -1,13 +1,14 @@
-import { get } from "lodash";
+import config from "config";
 import { FilterQuery, UpdateQuery } from "mongoose";
 import { SessionModel, Session } from "@/models/session";
 import { signJwt, verifyJwt } from "../utils/jwt";
 import { UserModel } from "@/models/user"; // needed to read +passwordVersion
-import config from "config";
+import type { AccessRefreshPayload } from "@/types/tokens";
+import logger from "@/utils/logger";
 
 export async function createSession(userId: string, userAgent?: string) {
   const session = await SessionModel.create({
-    user: userId,
+    userId,
     ...(userAgent ? { userAgent } : {}),
   });
   return session.toJSON();
@@ -36,43 +37,100 @@ export async function reissueAccessToken({
 }: {
   refreshToken: string;
 }): Promise<string | false> {
-  const { decoded } = verifyJwt(refreshToken);
-  if (!decoded || typeof decoded !== "object") return false;
+  const log = logger.child({ svc: "SessionService", op: "reissueAccessToken" });
 
-  const sessionId = get(decoded, "session");
-  if (!sessionId) return false;
+  const verification = verifyJwt(refreshToken);
+  if (!verification.valid || typeof verification.decoded !== "object") {
+    log.warn(
+      { reason: "verify_failed", expired: verification.expired },
+      "refresh token verification failed"
+    );
+    return false;
+  }
 
-  const session = await SessionModel.findById(sessionId);
-  if (!session || !session.valid) return false;
+  const {
+    session: sessionId,
+    pv: refreshPv,
+    sub,
+  } = verification.decoded as AccessRefreshPayload;
 
-  // Session schema might store `user` or `userId`; support both.
-  const userId = (session as any).user ?? (session as any).userId;
-  if (!userId) return false;
+  if (!sessionId) {
+    log.warn(
+      { reason: "missing_session", sub },
+      "token missing `session` claim"
+    );
+    return false;
+  }
+
+  // Lean row typed from your Session type
+  type SessionRow = Pick<Session, "_id" | "valid" | "userId">;
+
+  const session = await SessionModel.findById(sessionId)
+    .select("_id valid userId")
+    .lean<SessionRow>()
+    .exec();
+
+  if (!session) {
+    log.warn({ reason: "session_not_found", sessionId }, "session not found");
+    return false;
+  }
+  if (!session.valid) {
+    log.warn(
+      { reason: "session_invalid", sessionId },
+      "session marked invalid"
+    );
+    return false;
+  }
+
+  // Use session.userId; fall back to token sub if needed
+  const userId = session.userId || sub;
+  if (!userId) {
+    log.warn(
+      { reason: "user_unresolved", sessionId },
+      "could not resolve userId from session"
+    );
+    return false;
+  }
 
   // Read current passwordVersion (it's select:false → must opt in)
   const userWithPv = await UserModel.findById(userId).select(
     "+passwordVersion"
   );
-  if (!userWithPv) return false;
+  if (!userWithPv) {
+    log.warn({ reason: "user_not_found", userId, sessionId }, "user not found");
+    return false;
+  }
 
-  // Optional: if your refresh token payload also includes pv, reject on mismatch
-  const refreshPv = get(decoded, "pv");
+  // Deny reissue if refresh pv doesn't match current pv
   if (
     typeof refreshPv === "number" &&
     refreshPv !== userWithPv.passwordVersion
   ) {
-    // Password changed since refresh token was issued → deny reissue
+    log.warn(
+      {
+        reason: "pv_mismatch",
+        userId: String(userWithPv._id),
+        sessionId,
+        refreshPv,
+        currentPv: userWithPv.passwordVersion,
+      },
+      "password version mismatch; denying reissue"
+    );
     return false;
   }
 
-  // Issue a new access token carrying the latest pv
   const accessToken = signJwt(
     {
-      sub: userWithPv._id,
+      sub: String(userWithPv._id),
       pv: userWithPv.passwordVersion,
-      session: session._id,
+      session: String(session._id),
     },
     { expiresIn: config.get("accessTokenTtl") }
+  );
+
+  log.info(
+    { event: "access_reissued", userId: String(userWithPv._id), sessionId },
+    "issued new access token from refresh"
   );
 
   return accessToken;

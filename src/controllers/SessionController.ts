@@ -8,6 +8,10 @@ import {
 } from "../services/SessionService";
 import { validatePassword } from "../services/UserService";
 import { signJwt, verifyJwt } from "../utils/jwt";
+import { getCookieOptions, getCookieNames } from "@/utils/cookie";
+import { findPublicSessionsByUser } from "@/repos/sessions.repository";
+import type { AccessRefreshPayload } from "@/types/tokens";
+import { Session } from "@/models/session";
 
 // POST /sessions  (login)
 export async function createUserSessionHandler(req: Request, res: Response) {
@@ -18,7 +22,7 @@ export async function createUserSessionHandler(req: Request, res: Response) {
   const { user, passwordVersion } = result;
 
   // 2) Create session
-  const session: any = await createSession(
+  const session: Session = await createSession(
     user._id,
     req.get("user-agent") || undefined
   );
@@ -34,65 +38,66 @@ export async function createUserSessionHandler(req: Request, res: Response) {
     { expiresIn: config.get("refreshTokenTtl") }
   );
 
-  // 4) Set cookies (mirror your existing config)
-  res.cookie("accessToken", accessToken, {
+  // 4) Set cookies (names + options come from helpers)
+  const opts = getCookieOptions();
+  const names = getCookieNames();
+
+  res.cookie(names.access, accessToken, {
+    ...opts,
     maxAge: config.get<number>("accessTokenCookieTtl"),
-    httpOnly: true,
-    domain: config.get<string>("domain"),
-    path: "/",
-    sameSite: "strict",
-    secure: true, // set true in prod
   });
 
-  res.cookie("refreshToken", refreshToken, {
+  res.cookie(names.refresh, refreshToken, {
+    ...opts,
     maxAge: config.get<number>("refreshTokenCookieTtl"),
-    httpOnly: true,
-    domain: config.get<string>("domain"),
-    path: "/",
-    sameSite: "strict",
-    secure: true, // set true in prod
   });
 
-  // return tokens; optionally include the public user
+  // return tokens; TODO: optionally include the public user
   return res.status(201).send({ accessToken, refreshToken, user });
 }
 
 // GET /sessions  (list sessions for current user)
 export async function getUserSessionHandler(_req: Request, res: Response) {
-  // res.locals.user is a PublicUserDTO set by deserializeUser
-  const me = res.locals.user;
-  if (!me?._id) return res.sendStatus(401);
+  // res.locals.user is a PublicUserDTO (set by deserializeUser)
+  const userId = res.locals.user?._id as string | undefined;
+  if (!userId) return res.sendStatus(401);
 
-  const sessions = await findSessions({ user: me._id, valid: true });
-  if (!sessions) return res.sendStatus(404);
+  // prevent caches from storing session listings
+  res.setHeader("Cache-Control", "no-store");
 
-  return res.send(sessions);
+  const sessions = await findPublicSessionsByUser(userId);
+  return res.send(sessions ?? []);
 }
 
 // DELETE /sessions  (logout current session)
+
 export async function deleteUserSessionHandler(req: Request, res: Response) {
-  // We can no longer trust res.locals.user.session (locals has public user only).
-  // Decode a token to get the session id. Prefer refresh; fall back to access.
+  const names = getCookieNames();
+
   const refreshToken =
-    req.cookies?.refreshToken ||
+    req.cookies?.[names.refresh] ||
     (req.headers["x-refresh"] as string | undefined);
+
   const accessToken =
-    req.cookies?.accessToken ||
+    req.cookies?.[names.access] ||
     req.headers.authorization?.replace(/^Bearer\s/, "") ||
     undefined;
 
   let sessionId: string | null = null;
 
   if (refreshToken) {
-    const { decoded } = verifyJwt(refreshToken);
-    if (decoded && typeof decoded === "object" && "session" in decoded) {
-      sessionId = (decoded as any).session;
+    const result = verifyJwt(refreshToken);
+    if (result.valid && typeof result.decoded === "object") {
+      const { session } = result.decoded as AccessRefreshPayload;
+      sessionId = session;
     }
   }
+
   if (!sessionId && accessToken) {
-    const { decoded } = verifyJwt(accessToken);
-    if (decoded && typeof decoded === "object" && "session" in decoded) {
-      sessionId = (decoded as any).session;
+    const result = verifyJwt(accessToken);
+    if (result.valid && typeof result.decoded === "object") {
+      const { session } = result.decoded as AccessRefreshPayload;
+      sessionId = session;
     }
   }
 
@@ -100,9 +105,9 @@ export async function deleteUserSessionHandler(req: Request, res: Response) {
     await updateSession({ _id: sessionId }, { valid: false });
   }
 
-  // Clear cookies regardless (idempotent)
-  res.clearCookie("accessToken", { path: "/" });
-  res.clearCookie("refreshToken", { path: "/" });
+  const cookieOptions = getCookieOptions();
+  res.clearCookie(names.access, cookieOptions);
+  res.clearCookie(names.refresh, cookieOptions);
 
   return res.status(204).end();
 }
