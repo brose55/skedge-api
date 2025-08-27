@@ -23,7 +23,7 @@ const userInput = {
 
 const sessionPayload = {
   _id: new mongoose.Types.ObjectId().toString(),
-  user: userId,
+  userId: userId,
   valid: true,
   userAgent: "PostmanRuntime/7.28.4",
   createdAt: new Date("2022-07-28T00:32:18.456Z"),

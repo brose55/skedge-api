@@ -1,5 +1,5 @@
 import { Schema, model } from "mongoose";
-import type { Session, SessionModelType } from "./session.types";
+import type { Session } from "./session.types";
 import { v4 as uuidv4 } from "uuid";
 
 // basic created session schema

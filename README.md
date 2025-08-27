@@ -10,44 +10,82 @@ Minimal JWT claims – Tokens include only sub (user id), session, and passwordV
 
 Email normalization – Enforced lowercase/trim on emails at the schema level to guarantee uniqueness and prevent duplicates like Alice@GMAIL.com vs alice@gmail.com.
 
-Got it 👍 — here’s a short, dev-facing note you can drop into your README under **Authentication / Sessions**. It explains the `passwordVersion` check _and_ reminds future-you (or a teammate) about session id usage:
+Nice. You only need small README tweaks to reflect what we actually shipped (no fluff). Here are drop-in replacements/additions.
 
----
+### Cookies & CORS
+
+This app works in two deployment modes:
+
+1. **Same-site (recommended)**  
+   SPA and API are served from the same site (e.g., behind Caddy).
+
+   - Cookies: `SameSite=Lax`, `Secure` (in prod), `HttpOnly`
+   - CORS: add your site origin to `cors.origins`
+
+2. **Cross-site** (e.g., Netlify SPA → `api.example.com`)
+   - Cookies: `SameSite=None`, `Secure`, `HttpOnly`
+   - CORS: list the SPA origin(s) in `cors.origins`
+   - Client must send credentials (`fetch: { credentials: "include" }`, Axios: `{ withCredentials: true }`)
+
+All behavior is **config-driven**:
+
+- Cookie attributes: `cookie.*`
+- Allowed origins: `cors.origins` (array; with `credentials: true`, wildcards are not allowed)
+
+**Polish (prod):** when `cookie.hostPrefix: true`, cookies are named `__Host-accessToken` / `__Host-refreshToken` (requires HTTPS, `path="/"`, and **no** `domain`).  
+**Note:** Cookies are set/cleared via helpers (`getCookieOptions()` / `getCookieNames()`), so the **exact same attributes** are used when clearing, ensuring reliable deletion.
 
 ### 🔑 Authentication & Sessions
 
-1. **Password rotation (`passwordVersion`)**
+- **Token payload**: both access and refresh tokens carry `{ sub, pv, session }`  
+  (`sub` = user id, `pv` = passwordVersion, `session` = session id).  
+  We use a shared type for consumers:
+  ```ts
+  // src/types/tokens.ts
+  export type AccessRefreshPayload = JwtPayload & {
+    sub: string;
+    pv: number;
+    session: string;
+  };
+  ```
 
-   - Every access/refresh token includes a `pv` claim (the user’s current `passwordVersion`).
-   - On each request, `deserializeUser` compares the token’s `pv` against the DB.
-   - If they differ (e.g. after a password change), the token is rejected → user must log in again.
-   - This makes old tokens auto-expire whenever a password changes.
+````
 
-2. **Session id usage**
+* **Password rotation (`pv`)**: `deserializeUser` compares token `pv` vs DB `passwordVersion`.
+  Mismatch → token rejected (old tokens die when password changes).
 
-   - Access/refresh tokens also include a `session` claim (the Mongo `_id` of the session document).
-   - `res.locals.user` is **always a public user DTO** (never secrets, never the session id).
-   - 👉 If you need the session id (e.g. for logout, session invalidation), **decode the token and read `decoded.session`**. Do **not** expect `res.locals.user.session`.
-   - Example (logout):
+* **Session id**: per-device revoke. Logout/invalidations operate on the `session` claim.
+  `res.locals.user` is **public user DTO only**; session id is **not** stored there.
 
-     ```ts
-     const { decoded } = verifyJwt(refreshToken);
-     const sessionId =
-       decoded && typeof decoded === "object" ? (decoded as any).session : null;
-     if (sessionId) await updateSession({ _id: sessionId }, { valid: false });
-     ```
+* **GET /sessions**: returns `200 []` when none, and sets `Cache-Control: no-store`.
 
-3. **Tokens**
+* **Session model**: standardized on `userId` (not `user`) across queries and documents.
 
-   - **Access tokens** are short-lived and checked on every request.
-   - **Refresh tokens** are long-lived, tied to a session, and can be used to issue new access tokens.
-   - Both carry `{ sub, pv, session }`.
+### 🔐 JWT hardening
 
----
+- **Algorithm lock**: tokens are signed with RS256 and verified with `{ algorithms: ["RS256"] }`.
+- **Issuer/Audience**: tokens include and are verified against `jwt.issuer` and `jwt.audience`.
+- **Clock tolerance**: `jwt.clockTolerance = 5` seconds to smooth boundary expirations.
+- **PEM normalization**: keys are normalized to handle real newlines or `\n`-escaped envs.
+- **Verification result**: helpers return a discriminated union for easy branching:
 
-Would you like me to also add a little **flow diagram** (signup → login → request → refresh → logout) so it’s super clear where `pv` and `session` are checked?
+```ts
+  type VerifyJwtSuccess = { valid: true; expired: false; decoded: string | JwtPayload };
+  type VerifyJwtFailure = { valid: false; expired: boolean; decoded: null; error?: unknown };
+  export type VerifyJwtResult = VerifyJwtSuccess | VerifyJwtFailure;
+````
 
-### Security considerations
+- **Usage pattern**:
 
-- Passwords are stored with `select: false` at the schema level so they’re never fetched accidentally.
-- In flows that explicitly request `+password` (e.g., authentication), the document is never logged or returned. A safe re-fetch is used if a response payload is needed.
+  ```ts
+  const result = verifyJwt(token);
+  if (result.valid && typeof result.decoded === "object") {
+    const { sub, pv, session } = result.decoded as AccessRefreshPayload;
+    // ...
+  }
+  ```
+
+### 🪵 Logging
+
+- Refresh → access reissue logs with Pino (no secrets). Failures include reasons like
+  `verify_failed`, `session_not_found`, `session_invalid`, `pv_mismatch`; success logs `access_reissued`.

@@ -1,38 +1,17 @@
-/**
- * Public user access layer: use these functions from services.
- * Never import UserModel in services.
- * All responses MUST be either:
- *  - a public read using PUBLIC_USER_PROJECTION (lean),
- *  - or a DTO created via toPublicUser().
- */
-
-import UserModel from "../models/user/user.model";
+import { UserModel } from "@/models/user";
+import type { User } from "@/models/user";
 
 /** Whitelisted public fields (projection) */
 export const PUBLIC_USER_PROJECTION =
   "_id username email createdAt updatedAt" as const;
 
 /** What the API is allowed to return for a User */
-export type PublicUserDTO = {
-  _id: string;
-  username: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+export type PublicUserDTO = Pick<
+  User,
+  "_id" | "username" | "email" | "createdAt" | "updatedAt"
+>;
 
-/** Optional: centralized DTO builder if you ever load full docs */
-export function toPublicUser(u: any): PublicUserDTO {
-  return {
-    _id: String(u._id),
-    username: u.username,
-    email: u.email,
-    createdAt: u.createdAt,
-    updatedAt: u.updatedAt,
-  };
-}
-
-/** Safe-by-default reads */
+/** Public read by id */
 export async function findPublicById(
   id: string
 ): Promise<PublicUserDTO | null> {
@@ -42,17 +21,36 @@ export async function findPublicById(
     .exec();
 }
 
-// TODO: make this specific or get rid of it
-export async function findPublicOne(cond: any): Promise<PublicUserDTO | null> {
-  return UserModel.findOne(cond)
-    .select(PUBLIC_USER_PROJECTION)
-    .lean<PublicUserDTO>()
-    .exec();
-}
-
-/** Auth-only helpers explicitly opt into hidden fields and never return them */
+/** Auth-only helper: explicitly opts into hidden fields. Do not serialize directly. */
 export async function findWithSecretsByEmail(email: string) {
   return UserModel.findOne({ email })
     .select("+password +passwordVersion")
-    .exec(); // callers must NOT serialize this directly
+    .exec();
+}
+
+/** One-shot read: public user + passwordVersion (for deserializeUser) */
+type PublicUserWithPvRow = Pick<
+  User,
+  "_id" | "username" | "email" | "createdAt" | "updatedAt" | "passwordVersion"
+>;
+
+export async function findPublicWithPvById(
+  id: string
+): Promise<{ user: PublicUserDTO; passwordVersion: number } | null> {
+  const doc = await UserModel.findById(id)
+    .select(`${PUBLIC_USER_PROJECTION} +passwordVersion`)
+    .lean<PublicUserWithPvRow>()
+    .exec();
+
+  if (!doc) return null;
+
+  const user: PublicUserDTO = {
+    _id: doc._id,
+    username: doc.username,
+    email: doc.email,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+
+  return { user, passwordVersion: doc.passwordVersion };
 }
