@@ -54,6 +54,8 @@ All behavior is **config-driven**:
 * **Password rotation (`pv`)**: `deserializeUser` compares token `pv` vs DB `passwordVersion`.
   Mismatch → token rejected (old tokens die when password changes).
 
+* **Centralized authentication** – User.authenticate(email, password) normalizes input, explicitly selects the password hash (schema uses select:false), verifies credentials, and returns a safe DTO. The method always yields a typed AuthResult ({ ok:true, user,… } or { ok:false, reason }), giving a single point to add lockout, email-verification checks, or transparent re-hashing as security policies evolve.
+
 * **Session id**: per-device revoke. Logout/invalidations operate on the `session` claim.
   `res.locals.user` is **public user DTO only**; session id is **not** stored there.
 

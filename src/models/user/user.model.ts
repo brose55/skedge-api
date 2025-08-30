@@ -4,6 +4,7 @@ import config from "config";
 import logger from "../../utils/logger";
 import { v4 as uuidv4 } from "uuid";
 import type { User, UserMethods, UserModelType } from "./user.types";
+import { AuthResult, PublicUserDTO } from "@/types/user.dto";
 
 const userSchema = new Schema<User, UserModelType, UserMethods>(
   {
@@ -66,6 +67,43 @@ userSchema.methods.comparePassword = async function (
   }
 };
 
+// auth static
+userSchema.statics.authenticate = async function (
+  this: UserModelType,
+  email: string,
+  password: string
+): Promise<AuthResult> {
+  const normalized = email.trim().toLowerCase();
+
+  const doc = await this.findOne({ email: normalized })
+    .select("+password +passwordVersion")
+    .exec();
+  if (!doc) {
+    return { ok: false, reason: "NO_USER" };
+  }
+
+  const ok = await doc.comparePassword(password);
+  if (!ok) {
+    return { ok: false, reason: "BAD_PASSWORD" };
+  }
+
+  // return a safe DTO + pv — never return the doc
+  const user: PublicUserDTO = {
+    _id: doc._id,
+    username: doc.username,
+    email: doc.email,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+
+  return {
+    ok: true,
+    user,
+    passwordVersion: doc.passwordVersion,
+  };
+};
+
 // our actual User Model
 const UserModel = mongoose.model<User, UserModelType>("User", userSchema);
+
 export default UserModel;

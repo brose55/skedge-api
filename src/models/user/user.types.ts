@@ -1,5 +1,9 @@
+// src/models/user.types.ts
+import type { HydratedDocument, Model } from "mongoose";
+import type { AuthResult } from "@/types/user.dto";
+
 export type User = {
-  _id: string; // we use uuidv4(), so string is correct
+  _id: string;
   username: string;
   email: string;
   password: string;
@@ -12,7 +16,10 @@ export interface UserMethods {
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
-// this syntax guarantees zero runtime imports.
-export type UserDoc = import("mongoose").HydratedDocument<User, UserMethods>;
-// Model type (we can add UserStatics here if needed)
-export type UserModelType = import("mongoose").Model<User, {}, UserMethods>;
+export interface UserStatics {
+  authenticate(email: string, password: string): Promise<AuthResult>;
+}
+
+export type UserDoc = HydratedDocument<User, UserMethods>;
+// Statics are added this way so the compiler knows about them
+export type UserModelType = Model<User, {}, UserMethods> & UserStatics;
