@@ -1,15 +1,31 @@
 import { UserModel } from "@/models/user";
 import type { User } from "@/models/user";
+import type { AuthResult, NewUser, PublicUserDTO } from "@/types/user.dto";
 
-/** Whitelisted public fields (projection) */
+// Whitelisted public fields
 export const PUBLIC_USER_PROJECTION =
   "_id username email createdAt updatedAt" as const;
 
-/** What the API is allowed to return for a User */
-export type PublicUserDTO = Pick<
-  User,
-  "_id" | "username" | "email" | "createdAt" | "updatedAt"
->;
+export async function createPublicUser(input: NewUser): Promise<PublicUserDTO> {
+  const doc = await UserModel.create(input);
+
+  // Re-read with a public projection (prevents leaking password)
+  const pub = await UserModel.findById(doc._id)
+    .select(PUBLIC_USER_PROJECTION)
+    .lean<PublicUserDTO>()
+    .exec();
+
+  // Immediately after create, this should exist
+  if (!pub) throw new Error("failed to load created user");
+  return pub;
+}
+
+export async function authenticateUser(
+  email: string,
+  password: string
+): Promise<AuthResult> {
+  return UserModel.authenticate(email, password);
+}
 
 /** Public read by id */
 export async function findPublicById(
@@ -18,13 +34,6 @@ export async function findPublicById(
   return UserModel.findById(id)
     .select(PUBLIC_USER_PROJECTION)
     .lean<PublicUserDTO>()
-    .exec();
-}
-
-/** Auth-only helper: explicitly opts into hidden fields. Do not serialize directly. */
-export async function findWithSecretsByEmail(email: string) {
-  return UserModel.findOne({ email })
-    .select("+password +passwordVersion")
     .exec();
 }
 

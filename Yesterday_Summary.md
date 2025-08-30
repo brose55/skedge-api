@@ -1,3 +1,28 @@
+**ESLint guardrails (small but effective):**
+
+Ban importing the model from web/api layers:
+
+```json
+// .eslintrc.json
+
+{
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/models/user.model",
+
+            "message": "Import from users.repository.ts instead."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 You’re in great shape. You ended up with exactly **one meaningful static** (`User.authenticate`) and pushed everything else to where it belongs (schema config + service shaping). That’s the right call.
 
 ## What we’ve locked in

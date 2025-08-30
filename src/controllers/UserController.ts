@@ -9,10 +9,12 @@ export async function createUserHandler(
   res: Response
 ) {
   try {
-    const user = await createUser(req.body);
+    // strip out passwordConfirmation
+    const { passwordConfirmation, ...userData } = req.body;
+    const user = await createUser(userData);
     return res.status(201).json(user);
   } catch (err: any) {
-    logger.error(err);
+    logger.error({ err, at: "user.create" }, "User creation failed");
     return res.status(409).send(err?.message ?? "Conflict");
   }
 }
