@@ -1,7 +1,7 @@
 import "dotenv/config";
 import config from "config";
 import connection from "./utils/connection";
-import logger from "./utils/logger";
+import logger from "@/utils/logger";
 import createServer from "./utils/server";
 
 // Dynamically load env file
@@ -15,7 +15,6 @@ import createServer from "./utils/server";
 
 console.log(process.env.MONGO_INITDB_ROOT_USERNAME);
 
-// health check TODO:: delete
 logger.info("hello");
 logger.warn({ userId: "123" }, "something happened");
 logger.error(new Error("kaboom"), "with stack");

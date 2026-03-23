@@ -1,4 +1,3 @@
-// @/utils/cookieNames.ts
 import config from "config";
 
 export function cookieNames() {

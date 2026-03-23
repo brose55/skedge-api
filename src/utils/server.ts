@@ -1,6 +1,6 @@
 import express from "express";
 import deserializeUser from "../middleware/deserializeUser";
-import router from "../routes";
+import router from "../router";
 import cookieParser from "cookie-parser";
 import { corsMiddleware } from "@/middleware/cors";
 

@@ -1,0 +1,20 @@
+
+> test
+> jest
+
+[39/22/2026 P 18:03:54] [32mINFO[39m: [36mPassword validation failed[39m
+    [35mat[39m: "auth.validatePassword"
+    [35memail[39m: "jane@example.com"
+    [35mreason[39m: "NO_USER"
+[39/22/2026 P 18:03:54] [32mINFO[39m: [36mPassword validation failed[39m
+    [35mat[39m: "auth.validatePassword"
+    [35memail[39m: "jane@example.com"
+    [35mreason[39m: "BAD_PASSWORD"
+[39/22/2026 P 18:03:54] [32mINFO[39m: [36mauth failed[39m
+    [35mat[39m: "session.validatePassword"
+    [35memail[39m: "jane@example.com"
+    [35mreason[39m: "NO_USER"
+[39/22/2026 P 18:03:54] [32mINFO[39m: [36mauth failed[39m
+    [35mat[39m: "session.validatePassword"
+    [35memail[39m: "jane@example.com"
+    [35mreason[39m: "BAD_PASSWORD"

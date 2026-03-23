@@ -1,17 +1,16 @@
-// middleware/deserializeUser.ts
 import { Request, Response, NextFunction } from "express";
 import { get } from "lodash";
 import config from "config";
-import { reissueAccessToken } from "../services/SessionService";
-import { verifyJwt } from "../utils/jwt";
+import { sessionService } from "@/modules/session/app/session.service.instance";
+import { verifyJwt } from "@/utils/jwt";
 import { getCookieNames, getCookieOptions } from "@/utils/cookie";
-import { findPublicWithPvById } from "@/repos/users.repository";
+import { userRepository } from "@/modules/user/infra/user.repo.mongo";
 import type { AccessRefreshPayload } from "@/types/tokens";
 
 const deserializeUser = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const names = getCookieNames();
 
@@ -25,7 +24,7 @@ const deserializeUser = async (
     get(req, `cookies.${names.refresh}`) ||
     (get(req, "headers.x-refresh") as string | undefined);
 
-  // No tokens → unauthenticated passthrough
+  // No tokens means unauthenticated passthrough
   if (!accessToken && !refreshToken) return next();
 
   // Try current access token
@@ -37,7 +36,7 @@ const deserializeUser = async (
 
       if (typeof sub === "string" && typeof pv === "number") {
         // Single query: public user + passwordVersion
-        const record = await findPublicWithPvById(sub);
+        const record = await userRepository.findPublicWithPvById(sub);
         if (record && record.passwordVersion === pv) {
           res.locals.user = record.user;
           return next();
@@ -54,7 +53,9 @@ const deserializeUser = async (
   // Refresh flow
   if (!refreshToken) return next();
 
-  const newAccessToken = await reissueAccessToken({ refreshToken });
+  const newAccessToken = await sessionService.reissueAccessToken({
+    refreshToken,
+  });
   if (!newAccessToken) return next();
 
   // Set the new access token (cookie + header)
@@ -71,7 +72,7 @@ const deserializeUser = async (
     const { sub, pv } = newVerification.decoded as AccessRefreshPayload;
 
     if (typeof sub === "string" && typeof pv === "number") {
-      const record = await findPublicWithPvById(sub);
+      const record = await userRepository.findPublicWithPvById(sub);
       if (record && record.passwordVersion === pv) {
         res.locals.user = record.user;
       }
