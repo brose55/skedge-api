@@ -1,93 +1,283 @@
-# skedge-api
+# Skedge API
 
-Email normalization – Ensured all emails are stored consistently in lowercase and without extra whitespace by using Mongoose’s built-in schema options (lowercase: true, trim: true). This prevents duplicate accounts like Alice@GMAIL.com vs alice@gmail.com and enforces uniqueness at the database level.
+A REST API for **Skedge** - a scheduling assistant that takes a user's available time and a list of interests with priority levels, and generates a personalized schedule for them to follow.
 
-Safe data shaping & minimal JWT claims – Tokens contain only the minimal claims required (sub, session, passwordVersion) instead of the full user object. The User schema hides password by default (select: false) and a toJSON transform strips sensitive fields from API responses. This prevents credential leakage via tokens, logs, and JSON responses.
+Built as a portfolio project to demonstrate clean backend architecture in Node.js and TypeScript.
 
-Safe data shaping & leakage prevention – User passwords are hidden at the model level (select: false). A lightweight toJSON/toObject transform strips the field on serialization as a defense-in-depth measure.
+---
 
-Minimal JWT claims – Tokens include only sub (user id), session, and passwordVersion to reduce exposure and support server-side invalidation after password changes.
+## What it does
 
-Email normalization – Enforced lowercase/trim on emails at the schema level to guarantee uniqueness and prevent duplicates like Alice@GMAIL.com vs alice@gmail.com.
+A user tells Skedge:
 
-Nice. You only need small README tweaks to reflect what we actually shipped (no fluff). Here are drop-in replacements/additions.
+- How much time they have
+- What they want to do (interests like "python", "reading", "health")
+- How important each interest is (`low`, `medium`, or `high` priority)
 
-### Cookies & CORS
+Skedge uses that input to generate a schedule tailored to their time and priorities.
 
-This app works in two deployment modes:
+---
 
-1. **Same-site (recommended)**  
-   SPA and API are served from the same site (e.g., behind Caddy).
+## Tech stack
 
-   - Cookies: `SameSite=Lax`, `Secure` (in prod), `HttpOnly`
-   - CORS: add your site origin to `cors.origins`
+- **Runtime**: Node.js + TypeScript
+- **Framework**: Express
+- **Database**: MongoDB via Mongoose
+- **Auth**: JWT (access + refresh token pattern) with bcrypt password hashing
+- **Validation**: Zod
+- **Testing**: Jest + Supertest + mongodb-memory-server
+- **Logging**: Pino
 
-2. **Cross-site** (e.g., Netlify SPA → `api.example.com`)
-   - Cookies: `SameSite=None`, `Secure`, `HttpOnly`
-   - CORS: list the SPA origin(s) in `cors.origins`
-   - Client must send credentials (`fetch: { credentials: "include" }`, Axios: `{ withCredentials: true }`)
+---
 
-All behavior is **config-driven**:
+## Architecture
 
-- Cookie attributes: `cookie.*`
-- Allowed origins: `cors.origins` (array; with `credentials: true`, wildcards are not allowed)
+The project follows a **feature module** structure with strict layering. Each feature (`user`, `session`, `interest`) is a self-contained module broken into four layers:
 
-**Polish (prod):** when `cookie.hostPrefix: true`, cookies are named `__Host-accessToken` / `__Host-refreshToken` (requires HTTPS, `path="/"`, and **no** `domain`).  
-**Note:** Cookies are set/cleared via helpers (`getCookieOptions()` / `getCookieNames()`), so the **exact same attributes** are used when clearing, ensuring reliable deletion.
+```
+modules/
+└── user/
+    ├── domain/        # DTOs and repository interfaces - no DB, no HTTP
+    ├── infra/         # Mongoose models and repository implementations
+    ├── app/           # Business logic (services)
+    └── http/          # Controllers, routes, and request validation
+```
 
-### 🔑 Authentication & Sessions
+### Layer rules
 
-- **Token payload**: both access and refresh tokens carry `{ sub, pv, session }`  
-  (`sub` = user id, `pv` = passwordVersion, `session` = session id).  
-  We use a shared type for consumers:
-  ```ts
-  // src/types/tokens.ts
-  export type AccessRefreshPayload = JwtPayload & {
-    sub: string;
-    pv: number;
-    session: string;
-  };
-  ```
+```
+Controller → Service → Repository → Database
+```
 
-````
+- Controllers handle HTTP only - they never touch a database
+- Services contain business logic - they depend on repository interfaces, not implementations
+- Repositories handle all database access - they return DTOs, never raw Mongoose documents
+- Nothing outside a module imports from its `infra/` folder
 
-* **Password rotation (`pv`)**: `deserializeUser` compares token `pv` vs DB `passwordVersion`.
-  Mismatch → token rejected (old tokens die when password changes).
+### Why this matters
 
-* **Centralized authentication** – User.authenticate(email, password) normalizes input, explicitly selects the password hash (schema uses select:false), verifies credentials, and returns a safe DTO. The method always yields a typed AuthResult ({ ok:true, user,… } or { ok:false, reason }), giving a single point to add lockout, email-verification checks, or transparent re-hashing as security policies evolve.
-
-* **Session id**: per-device revoke. Logout/invalidations operate on the `session` claim.
-  `res.locals.user` is **public user DTO only**; session id is **not** stored there.
-
-* **GET /sessions**: returns `200 []` when none, and sets `Cache-Control: no-store`.
-
-* **Session model**: standardized on `userId` (not `user`) across queries and documents.
-
-### 🔐 JWT hardening
-
-- **Algorithm lock**: tokens are signed with RS256 and verified with `{ algorithms: ["RS256"] }`.
-- **Issuer/Audience**: tokens include and are verified against `jwt.issuer` and `jwt.audience`.
-- **Clock tolerance**: `jwt.clockTolerance = 5` seconds to smooth boundary expirations.
-- **PEM normalization**: keys are normalized to handle real newlines or `\n`-escaped envs.
-- **Verification result**: helpers return a discriminated union for easy branching:
+Because services depend on **interfaces** rather than concrete implementations, the real MongoDB repository can be swapped for a fake in tests with no changes to service code:
 
 ```ts
-  type VerifyJwtSuccess = { valid: true; expired: false; decoded: string | JwtPayload };
-  type VerifyJwtFailure = { valid: false; expired: boolean; decoded: null; error?: unknown };
-  export type VerifyJwtResult = VerifyJwtSuccess | VerifyJwtFailure;
-````
+// In production
+const userService = makeUserService(userRepository); // real Mongoose repo
 
-- **Usage pattern**:
+// In tests
+const userService = makeUserService(fakeRepo); // in-memory fake, no DB needed
+```
 
-  ```ts
-  const result = verifyJwt(token);
-  if (result.valid && typeof result.decoded === "object") {
-    const { sub, pv, session } = result.decoded as AccessRefreshPayload;
-    // ...
-  }
-  ```
+---
 
-### 🪵 Logging
+## Project structure
 
-- Refresh → access reissue logs with Pino (no secrets). Failures include reasons like
-  `verify_failed`, `session_not_found`, `session_invalid`, `pv_mismatch`; success logs `access_reissued`.
+```
+src/
+├── modules/
+│   ├── user/
+│   │   ├── domain/
+│   │   │   ├── user.dto.ts          # PublicUserDTO, NewUser, AuthResult
+│   │   │   └── user.repo.ts         # IUserRepository interface
+│   │   ├── infra/
+│   │   │   ├── user.model.ts        # Mongoose schema + statics
+│   │   │   ├── user.types.ts        # Mongoose-specific types
+│   │   │   └── user.repo.mongo.ts   # IUserRepository implementation
+│   │   ├── app/
+│   │   │   ├── user.service.ts      # makeUserService factory
+│   │   │   └── user.service.instance.ts
+│   │   ├── http/
+│   │   │   ├── user.controller.ts
+│   │   │   ├── user.routes.ts
+│   │   │   └── user.schema.ts       # Zod request validation
+│   │   ├── __tests__/
+│   │   │   ├── user.service.test.ts       # Unit tests (no DB)
+│   │   │   └── user.integration.test.ts   # Integration tests
+│   │   └── index.ts                 # Public module surface
+│   ├── session/                     # Same structure
+│   └── interest/                    # Same structure
+├── middleware/
+│   ├── cors.ts
+│   ├── deserialize-user.ts
+│   ├── require-user.ts
+│   └── validate-resource.ts
+├── utils/
+│   ├── connection.ts
+│   ├── cookie.ts
+│   ├── jwt.ts
+│   ├── logger.ts
+│   ├── password-validator.ts
+│   └── server.ts
+├── types/
+│   └── tokens.ts
+├── health.routes.ts
+├── router.ts
+└── app.ts
+```
+
+---
+
+## API endpoints
+
+### Health
+
+| Method | Path      | Description         |
+| ------ | --------- | ------------------- |
+| GET    | `/health` | Server health check |
+
+### Users
+
+| Method | Path            | Auth | Description         |
+| ------ | --------------- | ---- | ------------------- |
+| POST   | `/api/users`    | No   | Register a new user |
+| GET    | `/api/users/me` | Yes  | Get current user    |
+
+### Sessions
+
+| Method | Path            | Auth | Description                             |
+| ------ | --------------- | ---- | --------------------------------------- |
+| POST   | `/api/sessions` | No   | Login (returns access + refresh tokens) |
+| GET    | `/api/sessions` | Yes  | List active sessions                    |
+| DELETE | `/api/sessions` | Yes  | Logout (invalidates session)            |
+
+### Interests
+
+| Method | Path                         | Auth | Description                |
+| ------ | ---------------------------- | ---- | -------------------------- |
+| GET    | `/api/interests`             | Yes  | Get user's interests       |
+| PUT    | `/api/interests`             | Yes  | Create or update interests |
+| DELETE | `/api/interests/:interestId` | Yes  | Delete an interest         |
+
+---
+
+## Auth flow
+
+The API uses a dual-token auth pattern:
+
+1. `POST /api/sessions` returns a short-lived **access token** and a long-lived **refresh token**
+2. The access token is sent as a `Bearer` token or cookie on subsequent requests
+3. When the access token expires, `deserializeUser` middleware automatically reissues a new one from the refresh token
+4. Passwords are hashed with bcrypt and a `passwordVersion` field is stored - when a user changes their password, the version increments and all existing refresh tokens are invalidated
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18+
+- MongoDB (or Docker)
+
+### Installation
+
+```bash
+git clone https://github.com/yourusername/skedge-api.git
+cd skedge-api
+npm install
+```
+
+## Configuration
+
+The project uses the `config` package. Copy the example config and fill in your values:
+
+```bash
+cp config/default.js.example config/default.js
+```
+
+Generate an RS256 key pair:
+
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+Then paste the key contents into your config, replacing real newlines with `\n`.
+
+`config/default.js.example`:
+
+```js
+module.exports = {
+  port: 3000,
+  dbUri: "mongodb://localhost:27017/skedge",
+  saltWorkFactor: 10,
+  accessTokenTtl: "15m",
+  refreshTokenTtl: "1y",
+  accessTokenCookieTtl: 900000,
+  refreshTokenCookieTtl: 3.156e10,
+  privateKey: "YOUR_RS256_PRIVATE_KEY",
+  publicKey: "YOUR_RS256_PUBLIC_KEY",
+  jwt: {
+    issuer: "your-app-name",
+    audience: "your-client-name",
+  },
+};
+```
+
+Make sure your `.gitignore` includes:
+
+```
+config/default.js
+config/production.js
+config/test.js
+.env*
+```
+
+> **Never commit config files with real keys.** If they are already tracked, untrack them with `git rm --cached config/default.js` before `.gitignore` will take effect.
+
+### Running locally
+
+```bash
+npm run dev
+```
+
+### Running tests
+
+```bash
+# All tests
+npm test
+
+# Unit tests only (no DB required)
+npm test -- --testPathPattern="service.test"
+
+# Integration tests only
+npm test -- --testPathPattern="integration.test"
+```
+
+---
+
+## Testing approach
+
+The project has two levels of tests per module:
+
+**Unit tests** - fast, no database. The repository is replaced with a typed fake so service logic can be tested in complete isolation:
+
+```ts
+const fakeRepo: IUserRepository = {
+  findPublicById: async () => mockUser,
+  // ...
+};
+const service = makeUserService(fakeRepo);
+```
+
+**Integration tests** - spin up a real in-memory MongoDB via `mongodb-memory-server` and hit the actual Express routes with Supertest. These test the full request/response cycle including middleware, validation, and database interaction.
+
+---
+
+## Key design decisions
+
+**DTOs over raw documents** - the database layer never returns Mongoose documents to upper layers. Every repo method returns a plain DTO with only whitelisted fields, so sensitive fields like `password` and `passwordVersion` can never accidentally leak into a response.
+
+**Repository interfaces** - services depend on `IUserRepository`, not `UserModel`. This is what makes unit testing without a database possible.
+
+**Factory functions** - services are created with `makeUserService(repo)` rather than being singletons. The repo is injected, not imported. This is dependency injection without a DI container.
+
+**Strict module boundaries** - nothing outside a module imports from its `infra/` folder. The module's `index.ts` is the only public surface, and it only exports DTOs, interfaces, routers, and factories.
+
+## Reflections
+
+This project started with a flat structure and leaky barrels exporting
+Mongoose models directly into controllers. Refactoring it into feature
+modules with strict layer boundaries taught me why architecture decisions
+that feel like overhead early on pay off when the codebase grows,
+particularly around testability and preventing accidental data leaks.
+
+If I were starting over I'd establish the module structure from day one
+rather than retrofitting it.

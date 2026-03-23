@@ -1,4 +1,3 @@
-// @/utils/jwt.ts
 import jwt, {
   TokenExpiredError,
   type JwtPayload,
@@ -28,7 +27,7 @@ const publicKey = normalizeKey(config.get<string>("publicKey"));
 
 // NEW: read issuer/audience from config
 const { issuer, audience } = config.get<{ issuer: string; audience: string }>(
-  "jwt"
+  "jwt",
 );
 
 export function signJwt(payload: object, options?: SignOptions) {

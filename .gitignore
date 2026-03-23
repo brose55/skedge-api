@@ -11,6 +11,11 @@
 .pnp.*
 
 node_modules
-config/
 
+# Config (contains secrets)
+config/default.js
+config/production.js
+config/test.js
+
+# Environment files
 .env*
