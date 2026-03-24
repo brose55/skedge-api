@@ -25,7 +25,6 @@ const normalizeKey = (k: string) =>
 const privateKey = normalizeKey(config.get<string>("privateKey"));
 const publicKey = normalizeKey(config.get<string>("publicKey"));
 
-// NEW: read issuer/audience from config
 const { issuer, audience } = config.get<{ issuer: string; audience: string }>(
   "jwt",
 );

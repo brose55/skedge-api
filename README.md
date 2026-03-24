@@ -159,19 +159,68 @@ The API uses a dual-token auth pattern:
 
 ---
 
-## Getting started
+## Local development
 
 ### Prerequisites
 
-- Node.js 18+
-- MongoDB (or Docker)
+- Node.js 22+
+- Docker and Docker Compose
 
-### Installation
+### 1. Install dependencies
 
 ```bash
-git clone https://github.com/yourusername/skedge-api.git
-cd skedge-api
 npm install
+```
+
+### 2. Configure the app
+
+```bash
+cp .env.example .env
+```
+
+Fill in your values in `.env`. The config file is already set up to read from it.
+
+### 3. Start the database
+
+```bash
+npm run db
+```
+
+This starts MongoDB on port `27017` and Mongo Express (database UI) on port `8081`.
+You can browse your database at `http://localhost:8081`.
+
+### 4. Start the API
+
+```bash
+npm run dev
+```
+
+The API will be running at `http://localhost:3001`. Hit the health check to confirm everything is connected:
+
+```bash
+curl http://localhost:3001/health
+```
+
+### Stopping the database
+
+```bash
+npm run clean
+```
+
+To wipe the database volume completely:
+
+```bash
+docker compose down -v
+```
+
+### Running tests
+
+```bash
+# All tests
+npm test
+
+# Watch mode
+npm run test-watch
 ```
 
 ## Configuration
